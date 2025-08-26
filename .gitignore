@@ -1,0 +1,38 @@
+# Binaries y ejecutables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Carpetas de build
+bin/
+dist/
+build/
+
+# Archivos generados por Go
+*.log
+*.tmp
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDEs / Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Docker
+/db/data/
+
+# Configuración local
+.env
