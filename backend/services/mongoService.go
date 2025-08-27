@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -30,4 +31,29 @@ func ConnectMongo(uri, dbName string) {
 
 	DB = client.Database(dbName)
 	log.Println("✅ Conectado a Mongo:", dbName)
+
+	if err := ensureIndexes(DB.Collection("posts")); err != nil {
+		log.Fatal("❌ Error creando índices:", err)
+	}
+}
+
+
+func ensureIndexes(col *mongo.Collection) error {
+	_, err := col.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "title", Value: "text"},
+				{Key: "content", Value: "text"},
+			},
+			Options: options.Index().SetName("text_title_content"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "published", Value: 1},
+				{Key: "publishedAt", Value: -1},
+			},
+			Options: options.Index().SetName("idx_published_publishedAt"),
+		},
+	})
+	return err
 }
