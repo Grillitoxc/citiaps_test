@@ -1,4 +1,10 @@
 // controllers/postController.go
+//
+// Paquete controllers: capa HTTP para la entidad Post.
+// Convenciones:
+//   - Las validaciones de entrada (DTO / query params) viven aquí.
+//   - La traducción de errores a HTTP se realiza con writeError(...) usando sentinelas de services.
+//   - La lógica de negocio y acceso a datos está encapsulada en services.
 package controllers
 
 import (
@@ -16,14 +22,15 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-// Estructura uniforme para respuestas de error HTTP.
+// httpError define la forma uniforme de las respuestas de error HTTP.
 type httpError struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`
 	Details interface{} `json:"details,omitempty"`
 }
 
-// writeError traduce sentinelas de services → códigos HTTP.
+// writeError traduce los errores de dominio (sentinelas de services) a códigos HTTP.
+// Los controladores deben delegar aquí cualquier error retornado por services.
 func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrInvalidInput),
@@ -56,7 +63,10 @@ func writeError(c *gin.Context, err error) {
 	}
 }
 
-// CreatePost valida el DTO, delega al servicio y responde consistente.
+// CreatePost maneja POST /api/posts.
+// - Valida el DTO de entrada.
+// - Delegar en services.CreatePost.
+// - Responde 201 con Location y el insertedID.
 func CreatePost(c *gin.Context) {
 	var in dto.CreatePostDTO
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -86,19 +96,20 @@ func CreatePost(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-
 	c.Header("Location", fmt.Sprintf("/api/posts/%s", id.Hex()))
 	c.JSON(http.StatusCreated, gin.H{"insertedID": id.Hex()})
 }
 
-// GetPostByID recibe el id, delega al servicio y usa el mapper de errores.
+// GetPostByID maneja GET /api/posts/:id.
+// - Valida presencia de :id.
+// - Delegar en services.GetPostByID.
+// - Responde 200 con el documento, 400/404/500 según corresponda.
 func GetPostByID(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		writeError(c, services.ErrInvalidID)
 		return
 	}
-
 	post, err := services.GetPostByID(c.Request.Context(), id)
 	if err != nil {
 		writeError(c, err)
@@ -107,6 +118,10 @@ func GetPostByID(c *gin.Context) {
 	c.JSON(http.StatusOK, post)
 }
 
+// UpdatePostByID maneja PUT /api/posts/:id.
+// - Valida :id y DTO.
+// - Delegar en services.UpdatePostByID (que fija PublishedAt si aplica).
+// - Responde 200 con el documento actualizado.
 func UpdatePostByID(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -145,27 +160,59 @@ func UpdatePostByID(c *gin.Context) {
 	c.JSON(http.StatusOK, updated)
 }
 
-
+// DeletePostByID maneja DELETE /api/posts/:id.
+// - Valida :id.
+// - Delegar en services.DeletePostByID.
+// - Responde 204 si elimina; 400/404/500 si falla.
 func DeletePostByID(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		writeError(c, services.ErrInvalidID)
 		return
 	}
-
 	if err := services.DeletePostByID(c.Request.Context(), id); err != nil {
 		writeError(c, err)
 		return
 	}
-
-	// Convención REST: 204 No Content al eliminar correctamente
 	c.Status(http.StatusNoContent)
 }
 
-
-// GetPostsMetricsByTag maneja: GET /api/posts/metrics/by-tag
+// GetPostsMetricsByTag maneja GET /api/posts/metrics/by-tag?limit=&onlyPublished=.
+//
+// Query params:
+//   - limit (opcional, entero > 0; default 10; máx 100).
+//   - onlyPublished (opcional, "true"/"false") para filtrar por estado.
+//
+// Respuestas: 200 con []TagMetric; 400 si parámetros inválidos; 500 si falla la agregación.
 func GetPostsMetricsByTag(c *gin.Context) {
-	metrics, err := services.GetPostsMetricsByTag(c.Request.Context())
+	// limit
+	limit := 10
+	if raw := c.Query("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			writeError(c, services.Wrap(err, services.ErrInvalidInput, "limit must be a positive integer"))
+			return
+		}
+		limit = n
+	}
+
+	// onlyPublished
+	var onlyPublished *bool
+	if raw := c.Query("onlyPublished"); raw != "" {
+		switch strings.ToLower(raw) {
+		case "true":
+			v := true
+			onlyPublished = &v
+		case "false":
+			v := false
+			onlyPublished = &v
+		default:
+			writeError(c, services.Wrap(nil, services.ErrInvalidInput, "onlyPublished must be true or false"))
+			return
+		}
+	}
+
+	metrics, err := services.GetPostsMetricsByTag(c.Request.Context(), limit, onlyPublished)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -173,11 +220,21 @@ func GetPostsMetricsByTag(c *gin.Context) {
 	c.JSON(http.StatusOK, metrics)
 }
 
+// ListPosts maneja:
+//   GET /api/posts?q=&tag=&published=(true|false)&page=&limit=&sort=publishedAt|-publishedAt
+//
+// Query params:
+//   - q: búsqueda de texto (requiere índice {title:"text", content:"text"}).
+//   - tag: filtra por etiqueta exacta.
+//   - published: "true" | "false" | "" (sin filtro).
+//   - page, limit: enteros positivos (limit se sujeta a tope en services).
+//   - sort: "publishedAt" | "-publishedAt" (default: "-publishedAt").
+//
+// Respuestas: 200 con ListPostsResult; 400 si parámetros inválidos; 500 si falla el driver.
 func ListPosts(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	tag := strings.TrimSpace(c.Query("tag"))
 
-	// published: "true" | "false" | "" (no filtrar)
 	var publishedPtr *bool
 	if raw := c.Query("published"); raw != "" {
 		switch strings.ToLower(raw) {
@@ -193,7 +250,6 @@ func ListPosts(c *gin.Context) {
 		}
 	}
 
-	// page y limit
 	page := 1
 	if raw := c.Query("page"); raw != "" {
 		n, err := strconv.Atoi(raw)
@@ -203,6 +259,7 @@ func ListPosts(c *gin.Context) {
 		}
 		page = n
 	}
+
 	limit := 10
 	if raw := c.Query("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
@@ -213,7 +270,7 @@ func ListPosts(c *gin.Context) {
 		limit = n
 	}
 
-	sort := c.Query("sort") // "publishedAt" | "-publishedAt" | ""
+	sort := c.Query("sort")
 
 	params := services.ListPostsParams{
 		Q:         q,
