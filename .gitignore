@@ -34,5 +34,4 @@ Thumbs.db
 # Docker
 /db/data/
 
-# Configuración local
-.env
+
