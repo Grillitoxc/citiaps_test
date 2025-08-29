@@ -7,9 +7,10 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/gin-gonic/gin"
-
+	"github.com/gin-contrib/cors"
 	"blog-api/config"
 	"blog-api/routes"
 	"blog-api/services"
@@ -28,11 +29,21 @@ func main() {
 	//    - gin.Default() incluye logging de requests y recuperación ante pánicos.
 	r := gin.Default()
 
-	// 4. Registrar las rutas de la API.
+	// 4. Configurar CORS para admitir solicitudes desde el frontend.
+	r.Use(cors.New(cors.Config{
+        AllowOrigins:     []string{"http://localhost:3000"},
+        AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
+        AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+        ExposeHeaders:    []string{"Content-Length", "Location"},
+        AllowCredentials: true,
+        MaxAge:           12 * time.Hour,
+    }))
+
+	// 5. Registrar las rutas de la API.
 	//    - Ver routes.SetupRoutes: agrupa bajo /api y define endpoints de posts.
 	routes.SetupRoutes(r)
 
-	// 5. Iniciar servidor HTTP en el puerto configurado.
+	// 6. Iniciar servidor HTTP en el puerto configurado.
 	if cfg.Port == "" {
 		log.Fatal("❌ No se definió PORT en .env")
 	}
