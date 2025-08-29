@@ -21,6 +21,7 @@ Stack completo para gestionar publicaciones de un blog:
 
 ## 2) Estructura del proyecto
 
+```bash
 ├─ backend/ # API Go (Gin)
 │ ├─ controllers/
 │ ├─ routes/
@@ -39,7 +40,7 @@ Stack completo para gestionar publicaciones de un blog:
 │ └─ dump/ # opcional: BSON dump (si quieres cargarlo manualmente)
 ├─ docker-compose.yml
 └─ README.md
-
+```
 
 ### Semillas (seed) de datos
 
@@ -67,6 +68,8 @@ Es todo, los puertos son:
 
 (usuario/clave definidos en docker-compose.yml)
 
+---
+
 ## 4) Borrar/Levantar nuevamente
 ```bash
 docker compose down
@@ -74,11 +77,15 @@ docker compose up -d
 docker compose up -d --build
 ```
 
+---
+
 ## 5) Resetear la base y re-ejecutar el seed
 ```bash
 docker compose down -v
 docker compose up -d --build
 ```
+
+---
 
 ## 6) Rutas principales (prefijo /api):
 
