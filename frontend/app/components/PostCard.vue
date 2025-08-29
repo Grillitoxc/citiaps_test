@@ -6,9 +6,13 @@ const emit = defineEmits(['view', 'edit', 'delete'])
 
 const formatDate = (d) => {
   if (!d) return '-'
-  const date = typeof d === 'string' ? new Date(d) : d
-  return date.toLocaleDateString('es-CL', { timeZone: 'UTC' })
+  const dt = typeof d === 'string' ? new Date(d) : d
+  const y = dt.getUTCFullYear()
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(dt.getUTCDate()).padStart(2, '0')
+  return `${day}-${m}-${y}`
 }
+
 </script>
 
 <template>

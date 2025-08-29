@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   mongo:
     image: mongo:7
@@ -7,21 +9,63 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: rootpass
+      MONGO_INITDB_DATABASE: blog
     volumes:
-      - ./db/data:/data/db
+      - db_data:/data/db
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--username", "root", "--password", "rootpass", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--quiet", "mongodb://root:rootpass@localhost:27017/admin?authSource=admin", "--eval", "db.runCommand({ ping: 1 })"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   mongo-express:
     image: mongo-express:1
+    container_name: blog_mongo_express
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     environment:
       ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
       ME_CONFIG_MONGODB_ADMINUSERNAME: root
       ME_CONFIG_MONGODB_ADMINPASSWORD: rootpass
+      ME_CONFIG_BASICAUTH: "false"
     ports:
       - "8081:8081"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: blog_backend
+    environment:
+      PORT: "4000"
+      MONGODB_URI: "mongodb://root:rootpass@mongo:27017/blog?authSource=admin"
+      MONGODB_DB: "blog"
+    ports:
+      - "4000:4000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: blog_frontend
+    environment:
+      NUXT_PUBLIC_API_BASE: "/api"
+      HOST: "0.0.0.0"
+      NITRO_HOST: "0.0.0.0"
+      PORT: "3000"
+      NITRO_PORT: "3000"
+      NITRO_LOG_LEVEL: "debug"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:

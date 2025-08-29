@@ -42,7 +42,7 @@ const load = async () => {
                 tag: tag.value || undefined,
                 published: publishedParam === null ? undefined : String(publishedParam),
                 page: page.value,
-                limit: Math.min(limit.value, 100), // seguridad: tope 100
+                limit: Math.min(limit.value, 100),
                 sort: sort.value,
             },
         })
@@ -79,13 +79,6 @@ const removePost = async (id) => {
     await load()
 }
 
-// Util fecha
-const formatDate = (d) => {
-    if (!d) return '-'
-    const date = typeof d === 'string' ? new Date(d) : d
-    return date.toLocaleDateString('es-CL', { timeZone: 'UTC' })
-}
-
 // Mensaje de feedback
 const message = ref(null)
 const clearMessage = () => { message.value = null }
@@ -103,7 +96,7 @@ const createPost = async (payload) => {
         message.value = { type: 'error', text: '❌ Error al crear la publicación.' }
         throw e
     } finally {
-        closeCreate()                // <- cerrar desde el composable
+        closeCreate()
         setTimeout(clearMessage, 4000)
     }
 }
@@ -191,24 +184,26 @@ const updatePost = async (payload) => {
             </div>
 
             <!-- Lista -->
-            <div v-if="err" class="text-red-600 mb-4">Error: {{ err?.message || err?.data?.message || err }}</div>
-            <div v-if="loading">Cargando…</div>
+            <ClientOnly>
+                <div v-if="err" class="text-red-600 mb-4">Error: {{ err?.message || err?.data?.message || err }}</div>
+                <div v-if="loading">Cargando…</div>
 
-            <div v-else class="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                <PostCard v-for="p in items" :key="p._id" :post="p" @view="openDetail" @edit="openEdit"
-                    @delete="removePost" />
-            </div>
+                <div v-else class="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                    <PostCard v-for="p in items" :key="p._id" :post="p" @view="openDetail" @edit="openEdit"
+                        @delete="removePost" />
+                </div>
 
-            <!-- Paginación -->
-            <div v-if="totalPages > 1" class="mt-6 flex justify-center gap-2">
-                <button class="border rounded px-3 py-1.5" :disabled="page <= 1" @click="page--">Anterior</button>
-                <button v-for="n in totalPages" :key="n" class="border rounded px-3 py-1.5"
-                    :class="n === page ? 'bg-black text-white' : ''" @click="page = n">
-                    {{ n }}
-                </button>
-                <button class="border rounded px-3 py-1.5" :disabled="page >= totalPages"
-                    @click="page++">Siguiente</button>
-            </div>
+                <!-- Paginación -->
+                <div v-if="totalPages > 1" class="mt-6 flex justify-center gap-2">
+                    <button class="border rounded px-3 py-1.5" :disabled="page <= 1" @click="page--">Anterior</button>
+                    <button v-for="n in totalPages" :key="n" class="border rounded px-3 py-1.5"
+                        :class="n === page ? 'bg-black text-white' : ''" @click="page = n">
+                        {{ n }}
+                    </button>
+                    <button class="border rounded px-3 py-1.5" :disabled="page >= totalPages"
+                        @click="page++">Siguiente</button>
+                </div>
+            </ClientOnly>
         </div>
 
         <!-- Modal detalle -->
